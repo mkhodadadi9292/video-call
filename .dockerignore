@@ -1,0 +1,22 @@
+# not needed in the backend build context (bind-mounted at runtime instead)
+frontend
+jitsi-config
+jitsi-certs
+docs
+scripts
+nginx.conf
+docker-compose.yml
+README.md
+
+# local state
+.venv
+.idea
+.pytest_cache
+video_call_system.egg-info
+*.db
+.env*
+TASK_RECEIPT.md
+
+# vcs
+.git
+.gitignore

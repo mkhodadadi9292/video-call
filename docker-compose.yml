@@ -1,0 +1,108 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      network: host
+    container_name: vcs-backend
+    volumes:
+      - ./video_call.db:/app/video_call.db
+    environment:
+      - DATABASE_URL=sqlite:////app/video_call.db
+      - JITSI_JWT_APP_ID=${JITSI_JWT_APP_ID:-video-call-system}
+      - JITSI_JWT_SECRET=${JITSI_JWT_SECRET:-change-me-in-production-use-a-long-random-string}
+      - JITSI_JWT_EXPIRE_MINUTES=${JITSI_JWT_EXPIRE_MINUTES:-1440}
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: vcs-nginx
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./jitsi-certs:/etc/nginx/certs:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # ── Jitsi Meet ──────────────────────────────────────────────────────────
+  jitsi-prosody:
+    image: jitsi/prosody:latest
+    container_name: vcs-jitsi-prosody
+    environment:
+      - XMPP_DOMAIN=meet.jitsi
+      - XMPP_AUTH_DOMAIN=auth.meet.jitsi
+      - XMPP_MUC_DOMAIN=muc.meet.jitsi
+      - XMPP_INTERNAL_MUC_DOMAIN=internal-muc.meet.jitsi
+      - JICOFO_AUTH_USER=focus
+      - JICOFO_AUTH_PASSWORD=jitsi
+      - JVB_AUTH_USER=jvb
+      - JVB_AUTH_PASSWORD=jitsi
+      - ENABLE_AUTH=1
+      - AUTH_TYPE=jwt
+      - JWT_APP_ID=${JITSI_JWT_APP_ID:-video-call-system}
+      - JWT_APP_SECRET=${JITSI_JWT_SECRET:-change-me-in-production-use-a-long-random-string}
+      - GLOBAL_MODULES=bosh
+    restart: unless-stopped
+
+  jitsi-jicofo:
+    image: jitsi/jicofo:latest
+    container_name: vcs-jitsi-jicofo
+    environment:
+      - XMPP_SERVER=jitsi-prosody
+      - XMPP_DOMAIN=meet.jitsi
+      - XMPP_AUTH_DOMAIN=auth.meet.jitsi
+      - XMPP_MUC_DOMAIN=muc.meet.jitsi
+      - XMPP_INTERNAL_MUC_DOMAIN=internal-muc.meet.jitsi
+      - JICOFO_AUTH_USER=focus
+      - JICOFO_AUTH_PASSWORD=jitsi
+      - JICOFO_AUTH_DOMAIN=auth.meet.jitsi
+      - JVB_BREWERY_MUC=jvbbrewery
+    depends_on:
+      - jitsi-prosody
+    restart: unless-stopped
+
+  jitsi-jvb:
+    image: jitsi/jvb:latest
+    container_name: vcs-jitsi-jvb
+    ports:
+      - "${JVB_PORT:-10000}:10000/udp"
+    environment:
+      - XMPP_SERVER=jitsi-prosody
+      - XMPP_DOMAIN=meet.jitsi
+      - XMPP_AUTH_DOMAIN=auth.meet.jitsi
+      - XMPP_INTERNAL_MUC_DOMAIN=internal-muc.meet.jitsi
+      - JVB_AUTH_USER=jvb
+      - JVB_AUTH_PASSWORD=jitsi
+      - JVB_AUTH_DOMAIN=auth.meet.jitsi
+      - JVB_BREWERY_MUC=jvbbrewery
+    depends_on:
+      - jitsi-prosody
+    restart: unless-stopped
+
+  jitsi-web:
+    image: jitsi/web:latest
+    container_name: vcs-jitsi-web
+    ports:
+      - "${JITSI_WEB_PORT:-8443}:443"
+    volumes:
+      - ./jitsi-certs:/config/keys:ro
+      - ./jitsi-config/meet.conf:/defaults/meet.conf:ro
+    environment:
+      - PUBLIC_URL=${JITSI_PUBLIC_URL:-https://192.168.1.37:8443}
+      - XMPP_SERVER=jitsi-prosody
+      - XMPP_DOMAIN=meet.jitsi
+      - XMPP_AUTH_DOMAIN=auth.meet.jitsi
+      - XMPP_MUC_DOMAIN=muc.meet.jitsi
+      - XMPP_BOSH_URL_BASE=http://jitsi-prosody:5280
+      - ENABLE_COLIBRI_WEBSOCKET=1
+      - ENABLE_XMPP_WEBSOCKET=0
+      - ENABLE_SUBDOMAINS=false
+    depends_on:
+      - jitsi-prosody
+      - jitsi-jicofo
+      - jitsi-jvb
+    restart: unless-stopped

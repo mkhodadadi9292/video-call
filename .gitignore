@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+*.egg-info/
+
+# Database (real data — never commit)
+*.db
+*.db-shm
+*.db-wal
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+
+# TLS keys & certs (secrets)
+jitsi-certs/
+
+# Env files
+.env
+
+# Editor
+.idea/
+.vscode/
